@@ -1,0 +1,655 @@
+<!-- Travail Pratique - Volet 2 - Fait le 20 décembre 2022 par Alexander Rankov -->
+<!-- Dans mon jeu, le but est d'apporté la bombe à la frontière américaine pour sauver le Canada. Vous avez 30 secondes avant l'impact et votre but est de survivre l'attaque des missiles et des robots américains. Vous avez deux moteurs, du coup, protègez les! Amusez vous! -->
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Volet 1 - Création d'un mini-jeu avec javascript</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+
+<body>
+
+    <!--Créer une balise canvas -->
+    <canvas width="530" height="750"></canvas>
+
+    <script>
+
+        //Récupérer la balise canvas 
+        let leCanvas = document.querySelector("canvas");
+
+        //Définir son contexte de dessin en 2d
+        let ctx = leCanvas.getContext("2d");
+
+        //Dessiner l'image d'arrière-plan de débuter de jeu
+        leCanvas.style.backgroundImage = "url('images/zoneDeGuerre.jpg')";
+
+        //L'objet de l'avion qu'on pourra déplacer et animer avec les touches du clavier : gauche et droite
+
+        let avion = {
+            img: new Image(), // Image
+            urlImage: "images/positionInitialeAvion.png", // L'url de l'image de l'avion
+            x: 0, // Position sur l'axe des x
+            y: 0, // Position sur l'axe des y
+            largeur: 177, // Largeur d'une vignette de l'avion
+            hauteur: 93, // Hauteur d'une vignette de l'avion
+            indexVignette: 0, // Première vignette
+            nbVignettes: 3, // Le Nombre de vignettes
+            sourceX: 0, // Coordonnée x de la vignette à afficher
+            vitesseX: 5,// Vitesse horizontale
+        }
+
+        //Charger l'image de l'avion (Position initiale)
+        avion.img.src = avion.urlImage;
+
+        //Positionner l'avion en bas,, au centre du canvas
+        avion.x = leCanvas.width / 2 - avion.largeur / 2;
+        avion.y = leCanvas.height / 1.07 - avion.hauteur;
+
+        //Déclaration de la variable missile de type Objet
+        let missile = {
+            img: new Image(), // Image
+            urlImage: "images/navette.png", // Le chemin pour accéder à l'image de la missile
+            x: 0, // Position de départ sur l'axe des x
+            y: 0, // Position sur l'axe des y
+            largeur: 50, // Largeur de la missile
+            hauteur: 50, // Hauteur de la missile
+            vitesseX: 5, // Vitesse horizontale de la missile
+            vitesseY: 5, // Vitesse verticale de la missile
+        };
+
+
+        //Déclaration de la variable des robots
+        let robot = {
+            img: new Image(), //image
+            urlImage: "images/robotMissile.png", //Chemin pour accéder à l'image du robot
+            x: 0, //Position de départ sur l'axe des x
+            y: 0, //Position sur l'axe des y
+            largeur: 31, //Largeur du robot
+            hauteur: 47, //Hauteur du robot
+            vitesseX: 5, //Vitesse horizontale du robot
+            vitesseY: 5, //Vitesse verticale du robot
+        };
+
+        //Déclaration de la variable des vies
+        let vie = {
+            img: new Image(),
+            x: 0,
+            y: 0,
+            largeur: 64,
+            hauteur: 64,
+        }
+
+        //Faire apparaître l'image des coeurs pour que quand le jeu commence
+        vie.img.src = "images/coeurs.png";
+
+        //Variable indiquant combien de vies reste avant que l'avion s'écrase
+        let nombreVies = 2;
+
+        //Variable pour indiquer votre temps restant jusqu'à la victoire
+        let temps;
+
+        //Variable pour mémoriser quand que la partie va être terminée
+        let finPartie = false;
+
+        let partieEstEnCours = false;
+
+        //Objet pour gérer les touches fleches du clavier: Droite et Gauche
+        let fleches = {
+            gauche: false,
+            droite: false,
+        };
+
+        //Tableau pour stocker les missiles: lesMissiles
+        let lesMissiles = [];
+
+        //Tableau pour stocker les robots : lesRobots
+        let lesRobots = [];
+
+        //ZONE POUR LES SONS DU JEU//
+
+        //Jouer le son du bruit de moteur de l'avion quand le jeu commence et jusqu'à ce que le jeu se termine ou qu'il y ait une collision entre 
+        let sonBruitAvion = new Audio("sons/bruitMoteurAvion.mp3");
+
+        //Jouer le son du bruit de l'explosion de l'avion quand l'avion se fait frapper par une missile
+        let sonExplosion = new Audio("sons/bruitExplosion.mp3");
+
+        //Jouer le son de la victoire après que la partie soit terminée et avec du succès
+        let sonVictoire = new Audio("sons/applaudisement.mp3");
+
+        //Jouer le son de la collision du robot chaque fois que l'avion se fait frapper par un robot
+        let sonRobotCollision = new Audio("sons/impactRobot.wav");
+
+
+        ////////////////////////////// DÉMARRAGE ET ÉVÉNEMENTS DU JEU ///////////////////////////////////
+
+        //On part l'actualisation du jeu avec IntervalJeuID
+        let intervalJeuID;
+
+        //Ceci est la variable pour les sprites sheet de l'avion
+        let animationAvion;
+
+        //On fait une variable pour le compteur du temps restant de la partie
+        let compteur = setInterval(tempsRestant, 1000);
+
+        //On ajoute une missile à toutes les deux secondes du jeu
+        let intervalMissileID = setInterval(attaqueMissile, 1000 * 3);
+
+        //On ajoute un robot à toutes les deux secondes du jeu
+        let intervalRobot = setInterval(attaqueRobot, 1000 * 3);
+
+        //Mettre une première missile
+        attaqueMissile();
+
+        //Mettre un premier robot
+        attaqueRobot();
+
+        //Écouteur sur le document pour détecter si des touches de clavier sont appuyées ou relâchées
+        document.addEventListener("keydown", presserTouche);
+        document.addEventListener("keyup", relacherTouche);
+
+        //Écouteur d'événements sur le canvas pour détecter si le canvas est touché pour commencer le jeu, au cas où vous échouez votre mission
+        leCanvas.addEventListener("click", commencerLeJeu);
+
+
+        /////////////////////////// LES FONCTIONS DU JEU////////////////////////////////////////////////////////////
+
+        //Zone pour faire actualiser l'affichage des objets et les actions du jeu
+        function actualiserJeu() {
+
+            //Effacer le contenu actuel du contexte de rendu du canvas
+            ctx.clearRect(0, 0, leCanvas.width, leCanvas.height);
+
+            //Deplacement de l'avion
+            deplacerAvion();
+
+            //Afficher le temps restant
+            afficherTemps();
+
+            //faire déplacer les missiles
+            deplacerLesMissiles();
+
+            //faire déplacer les robots
+            deplacerLesRobots();
+
+            //Faire apparaître le nombre de vies restant
+            afficherLesVies();
+
+            ////Vérifier s'il y a une collision entre une missile et l'avion
+            //Si oui on diminue la vitesse de l'avion (Dépendant de s'il s'est fait touché par un robot ou une missile)... et l'avion n'a plus de moteurs
+            //C'est la fin du jeu...
+
+            //S'il y a collision entre l'avion et la missile,on dimnue la vitesse de 3. Si l'avion n'a plus de vie, le jeu s'arrête
+            for (let uneMissile of lesMissiles) {
+
+                //Variable de collision entre l'avion et la missile
+                let collisionAvionMissile = detecterCollisionEntreAvionEtMissile(avion, uneMissile);
+
+                //S'il y a collision...
+                if (collisionAvionMissile == true) {
+
+                    //On fait jouer le son de l'explosion
+                    sonExplosion.play();
+
+                    //Recupère la position de la roche dans lesRoches
+                    let index = lesMissiles.indexOf(uneMissile);
+                    lesMissiles.splice(index, 1);
+
+                    //On enlève un moteur (vie) de l'avion
+                    nombreVies--;
+
+                    //On fait perdre 3 vitesse horizontal à l'avion
+                    avion.vitesseX -= 3;
+                }
+
+                //Si le compteur atteint le 0...
+                if (nombreVies == 0) {
+
+                    //On efface le canvas de l'écran
+                    ctx.clearRect(0, 0, leCanvas.width, leCanvas.height);
+
+                    //On mémorise que le jeu est terminé
+                    finPartie = true;
+
+                    //On arrête l'exécution des 5 setInterval() en cours
+
+                    //Arrêt de l'intervalJeuID
+                    clearInterval(intervalJeuID);
+
+                    //Arrêt de l'animationAvion
+                    clearInterval(animationAvion);
+
+                    //Arrêt de l'intervalMissileID
+                    clearInterval(intervalMissileID);
+
+                    //Arrêt de l'intervalRobot
+                    clearInterval(intervalRobot);
+
+                    //Arrêt de l'interval du compteur
+                    clearInterval(compteur);
+
+                    //On affiche la photo d'arrière-plan de l'accident de l'avion
+                    leCanvas.style.backgroundImage = "url('images/accident.jpg')";
+
+                    //On arrête de jouer le bruit de l'avion
+                    sonBruitAvion.pause();
+
+                }
+            }
+
+            //S'il y a collision entre l'avion et le robot, la vitesse de celui-ci est diminué de 1. Si l'avion n'A plus de moteur, le jeu s'arrête.
+            for (let unRobot of lesRobots) {
+
+                //Variable de collision entre l'avion et la robot
+                let collisionAvionRobot = detecterCollisionEntreAvionEtMissile(avion, unRobot);
+
+                //S'il y a collision...
+                if (collisionAvionRobot == true) {
+
+                    //Jouez le son de la musique triste
+                    sonRobotCollision.play();
+
+                    //Recupère la position de la roche dans lesRoches
+                    let index = lesRobots.indexOf(unRobot);
+                    lesRobots.splice(index, 1);
+
+                    //On enlève un moteur (vie) de l'avion
+                    nombreVies--;
+
+                    //On fait perdre 1 vitesse horizontal à l'avion
+                    avion.vitesseX -= 1;
+                }
+
+                //Si le compteur atteint 0...
+                if (nombreVies == 0) {
+
+                    //On efface le canvas de l'écran
+                    ctx.clearRect(0, 0, leCanvas.width, leCanvas.height);
+
+                    //On mémorise que le jeu est terminé
+                    finPartie = true;
+
+                    //On arrête l'exécution des 5 setInterval() en cours
+
+                    //Arrêt de l'intervalJeuID
+                    clearInterval(intervalJeuID);
+
+                    //Arrêt de l'animationAvion
+                    clearInterval(animationAvion);
+
+                    //Arrêt de l'intervalMissileID
+                    clearInterval(intervalMissileID);
+
+                    //Arrêt de l'intervalRobot
+                    clearInterval(intervalRobot);
+
+                    //Arrêt de l'interval du compteur
+                    clearInterval(compteur);
+
+                    //On affiche la photo d'arrière-plan de l'accident de l'avion
+                    leCanvas.style.backgroundImage = "url('images/accident.jpg')";
+
+                    //Arrêt du bruit de l'avion
+                    sonBruitAvion.pause();
+
+                    //On fait apparaître le texte disant que le joueur a échoué sa mission de sauver le Canada
+                    missionÉchouée();
+                }
+            }
+        }
+
+
+        //Fonction pour le commencement du jeu//
+        //Si le click de la souris est relâchée, on affiche l'arrière-plan du jeu
+
+        function commencerLeJeu() {
+
+            //On enlève d'abord ce qui est déjà dessiné dans la balise <canvas>
+            ctx.clearRect(0, 0, leCanvas.width, leCanvas.height);
+
+            //On affiche que la variable de temps est de 30
+            temps = 30;
+
+            //On affiche ensuite l'arrière-plan du <canvas> qui est l'océan qui bouge
+            leCanvas.style.backgroundImage = "url('images/oceanArriere.gif')";
+
+            //On affiche le setInterval() pour actualiser le jeu
+            intervalJeuID = setInterval(actualiserJeu, 1000 / 60);
+
+            //On affiche le setInterval() pour gérer l'image de l'avion
+            animationAvion = setInterval(gererImageAvion, 1000 / 3);
+
+            //On enlève le gestionnaire d'événement pour ne pas perturber la suite du jeu durant les prochains clique ou si le joueur clique par accident
+            leCanvas.removeEventListener("click", commencerLeJeu);
+
+            //On fait jouer en continue le son du bruit de moteur de l'avion
+            sonBruitAvion.loop = true;
+            sonBruitAvion.play();
+            
+            partieEstEnCours = true;
+
+            //Faire apparaître le temps restant de la partie
+            tempsRestant();
+        }
+
+
+        //Fonction pour faire recommencer le jeu quand l'avion perd tous ces vies quand que les missiles et les robots le touchent//
+
+        function recommencerLeJeu() {
+            //Si la partie est terminée...
+            if (finPartie == true) {
+                //On rafraîchit la page
+                document.location.reload();
+            }
+        }
+
+        //Fonction pour montrer le temps restant de la partie//
+
+        function tempsRestant() {
+
+            //Si le temps est supérieur à 0...
+            if (temps > 0) {
+
+                //On décrémente le compteur de 1
+                temps -= 1;
+
+            }
+            //Sinon... Si le compteur est égal à 0
+            else if (temps == 0) {
+
+                //On efface tout ce qui est dans le canvas
+                ctx.clearRect(0, 0, leCanvas.width, leCanvas.height);
+
+                //On mémorise que le jeu est terminé
+                finPartie = true;
+
+                //On fait arrêter le bruit du moteur de l'avion
+                sonBruitAvion.pause();
+
+                //On fait jouer le son de la victoire que vous avez sauvé le Canada des Américains
+                sonVictoire.play();
+
+                //On affiche l'image des guerriers qui nous félicitent
+                leCanvas.style.backgroundImage = "url('images/guerriers.jpg')";
+
+                //on arrête l'exécution des 3 setInterval() en cours
+                //On arrête le setInterval de l'intervalJeuID
+                clearInterval(intervalJeuID);
+
+                //On arrête le setInterval de l'intervalMissileID
+                clearInterval(intervalMissileID);
+
+                //On arrête le setInterval du compteur
+                clearInterval(compteur);
+
+                //On fait apparaître le texte pour féliciter notre joueur qu'il a accompli sa mission
+                missionRéussie();
+            }
+        }
+
+        //Fonction utilisé pour faire afficher les moteurs restants de l'avion//
+        function afficherLesVies() {
+            for (let index = 0; index < nombreVies; index++) {
+                vie.y = index * (vie.hauteur + 20);
+                //console.log(vie.x);
+                ctx.drawImage(vie.img, vie.x, vie.y);
+            }
+        }
+
+
+        //Fonction utilisé pour faire manoeuvrer l'avion dans les sens horizontale//
+        function deplacerAvion() {
+            //Calculer les futures positions de l'avion et définir la feuille de sprites à afficher
+            //Manoeuvre droite
+            if (fleches.droite) {
+                avion.x += avion.vitesseX;
+                avion.img.src = "images/manoeuvreDroite.png";
+            }
+
+            //Manoeuvre gauche
+            if (fleches.gauche) {
+                avion.x -= avion.vitesseX;
+                avion.img.src = "images/manoeuvreGauche.png";
+            }
+
+            //Ça se peut que l'avion sort des limites du canvas, du coup...//
+
+            //Si l'avion sort par la droite on le ramène à gauche
+            //À droite
+            if (avion.x > leCanvas.width) {
+                avion.x = -avion.largeur;
+
+            }
+            //Si l'avion sort par la gauche on le ramène à droite
+            //À gauche
+            if (avion.x < -avion.largeur) {
+                avion.x = leCanvas.width;
+            }
+
+            //Dessiner les spritesheet de l'avion
+            ctx.drawImage(avion.img, avion.sourceX, 0, avion.largeur, avion.hauteur, avion.x, avion.y, avion.largeur, avion.hauteur);
+        }
+
+        //Fonction pour faire tomber les missiles à la verticale et les fera apparaître à chaque 2 secondes
+
+        function attaqueMissile() {
+            if(partieEstEnCours == true){
+                //La variable de la missile
+                let missile = {
+                    img: new Image(), //image
+                    urlImage: "images/navette.png", //Chemin pour accéder à l'image de la missile
+                    x: entierHasard(0, leCanvas.width - 50), //Position de départ sur l'axe des x
+                    y: -50, //Position sur l'axe des y
+                    largeur: 50, //Largeur de la missile
+                    hauteur: 50, //Hauteur de la missile
+                    vitesseY: entierHasard(1, 3), //Vitesse verticale de la missile entre 1 et 3
+                };
+
+                //Charger la source de l'image de la missile
+                missile.img.src = missile.urlImage;
+
+                //mettre cette missile dans le tableau des missiles
+                lesMissiles.push(missile);
+            }
+        }
+
+        //Fonction pour calculer un nombre entier au hasard entre 2 valeurs
+        function entierHasard(nbMin, nbMax) {
+            let intervalle = nbMax - nbMin;
+            return nbMin + Math.round(Math.random() * intervalle);
+        }
+
+        //Fonction pour faire tomber les robots à la verticale et les fera apparaître à chaque 2 secondes
+
+        function attaqueRobot() {
+            if(partieEstEnCours == true){
+            //La variable du robot
+            let robot = {
+                img: new Image(), //image
+                urlImage: "images/robotMissile.png", //Chemin pour accéder à l'image
+                x: entierHasard(0, leCanvas.width - 31), //Position de départ sur l'axe des x
+                y: -31, //Position sur l'axe des y
+                largeur: 31, //Largeur du robot
+                hauteur: 47, //Hauteur du robot
+                vitesseY: entierHasard(1, 2.5), //Vitesse verticale du robot entre 1 et 2.5
+            };
+
+            //Charger la source de l'image du robot
+            robot.img.src = robot.urlImage;
+
+            //mettre cette missile dans le tableau des robots
+            lesRobots.push(robot);
+        }
+        }
+
+        //Fonction pour gérer la vignette à afficher pour l'animation de l'avion
+        function gererImageAvion() {
+
+            //Définir la coordonnée sourceX de la vignette à afficher
+            avion.sourceX = avion.indexVignette * avion.largeur;
+
+            //Incrémenter et gérer l’index de la prochaine vignette à afficher
+            avion.indexVignette += 1;
+
+            if (avion.indexVignette == avion.nbVignettes) {
+                avion.indexVignette = 0;
+            }
+        }
+
+        //Fonction pour afficher le temps sur le canvas
+        function afficherTemps() {
+            //Styles du texte
+            ctx.font = "bold 40px Calibri";
+            ctx.textBaseline = "top";
+            ctx.strokeStyle = "cyan";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "left";
+
+            //Dessiner le texte en bas à droite
+            ctx.fillText("Temps restant : " + temps, leCanvas.width * 0.43, leCanvas.height * 0.95);
+        }
+
+        //Fonction utilisé pour que quand l'avion se fasse éliminé par les missiles ou les robots, en d'autres mots, il n'y a plus de moteurs
+        function missionÉchouée() {
+            //Styles du texte
+            ctx.font = "bold 18px Arial";
+            ctx.textBaseline = "top";
+            ctx.strokeStyle = "cyan";
+            ctx.fillStyle = "black";
+            ctx.textAlign = "left";
+
+            //Dessiner le texte un par-dessus l'autre
+            ctx.fillText("Mission échouée! ", leCanvas.width * 0.05, leCanvas.height * 0.05);
+            ctx.fillText("Votre avion était détruit par les Américains.", leCanvas.width * 0.05, leCanvas.height * 0.10);
+            ctx.fillText("Et,maintenant, le Canada appartient aux États-Unis.", leCanvas.width * 0.05, leCanvas.height * 0.15);
+            ctx.fillText("Appuyez sur la touche entrée pour recommencer le jeu.", leCanvas.width * 0.05, leCanvas.height * 0.20);
+        }
+
+        //Fonction utilisé pour que quand l'avion survie l'attaque américaine qu'on félicite le joueur de cette victoire incroyable
+        function missionRéussie() {
+            //Styles du texte
+            ctx.font = "bold 18px Montserrat";
+            ctx.textBaseline = "top";
+            ctx.strokeStyle = "cyan";
+            ctx.fillStyle = "black";
+            ctx.textAlign = "left";
+
+            //Dessiner le texte un par-dessus l'autre
+            ctx.fillText("Bravo! Tu as réussi ta mission! ", leCanvas.width * 0.05, leCanvas.height * 0.05);
+            ctx.fillText("Vous avez réussi à sauver le Canada des américains.", leCanvas.width * 0.05, leCanvas.height * 0.10);
+            ctx.fillText("Vous êtes un héros pour la population canadienne.", leCanvas.width * 0.05, leCanvas.height * 0.15);
+            ctx.fillText("Appuyez sur la touche entrée pour recommencer la guerre.", leCanvas.width * 0.05, leCanvas.height * 0.20);
+        }
+
+
+
+        //Fonction pour déplacer les missiles
+        function deplacerLesMissiles() {
+
+            //Tous les missiles descendent du ciel!!!
+            for (let uneMissile of lesMissiles) {
+
+                //incrémenter sa vitesse sur l'axe des y
+                uneMissile.y += uneMissile.vitesseY;
+
+                //Dessiner la missile
+                ctx.drawImage(uneMissile.img, uneMissile.x, uneMissile.y);
+
+                //On les retire du tableau losrqu'elle quitte le bas du canvas
+                if (uneMissile.y > leCanvas.height) {
+                    //Recupère la position de la roche dans lesRoches
+                    let index = lesMissiles.indexOf(uneMissile);
+
+                    //Enleve la racohe à la position pointée par index
+                    lesMissiles.splice(index, 1);
+                }
+            }
+        }
+
+        //Fonction pour déplacer les robots
+        function deplacerLesRobots() {
+            //Tous les robots attaquent du ciel!!!
+            for (let unRobot of lesRobots) {
+                //incrémenter sa vitesse sur l'axe des y
+                unRobot.y += unRobot.vitesseY;
+
+                //Dessiner le robot
+                ctx.drawImage(unRobot.img, unRobot.x, unRobot.y);
+
+                //On les retire du tableau losrqu'elle quitte le bas du canvas
+                if (unRobot.y > leCanvas.height) {
+                    //Recupère la position du robot dans lesRobots
+                    let i = lesRobots.indexOf(unRobot);
+
+                    //Enleve le robot à la position pointée par index
+                    lesRobots.splice(i, 1);
+                }
+            }
+        }
+
+        // Fonction pour détecter quelles touches sont appuyées
+        function presserTouche(event) {
+            //Enlever les comportements par défaut du navigateur
+            event.preventDefault();
+            //Enregistrer si une touche gauche/droite est pressée
+            if (event.keyCode == 39) {
+                //flèche droite
+                fleches.droite = true;
+            }
+
+            if (event.keyCode == 37) {
+                //flèche gauche
+                fleches.gauche = true;
+            }
+        }
+
+        // Fonction pour détecter quelles touches sont relâchées
+        function relacherTouche(event) {
+            //Enlever les comportements par défaut du navigateur
+            event.preventDefault();
+            //Enregistrer si une touche gauche/droite est relâchée
+            if (event.keyCode == 39) {
+                //flèche droite
+                fleches.droite = false;
+                //Sprite utilisé pour quand la touche est relâchée
+                avion.img.src = "images/positionInitialeAvion.png";
+            }
+            if (event.keyCode == 37) {
+                //flèche gauche
+                fleches.gauche = false;
+                //Sprite utilisé pour quand la touche est relâchée
+                avion.img.src = "images/positionInitialeAvion.png";
+            }
+            //Enregistrer si la touche "Entrée" est touchée
+            if (event.keyCode == 13) {
+                //La touche «enter»
+                recommencerLeJeu();
+            }
+        }
+
+        //Fonction pour détecter la collision entre deux rectangles
+        //L'avion et les missiles sont considérés comme des rectangles
+        //Fonction qui détecte si deux objets rectangulaires se touchent
+        function detecterCollisionEntreAvionEtMissile(rectangle1, rectangle2) {
+            if (
+                rectangle1.x < rectangle2.x + rectangle2.largeur &&
+                rectangle1.x + rectangle1.largeur > rectangle2.x &&
+                rectangle1.y < rectangle2.y + rectangle2.hauteur &&
+                rectangle1.y + rectangle1.hauteur > rectangle2.y
+            ) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+    </script>
+</body>
+
+</html>
